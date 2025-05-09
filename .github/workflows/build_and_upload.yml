@@ -62,4 +62,11 @@ jobs:
             -F "key=$UPLOAD_KEY" \
             -F "version=$VERSION" \
             -F "pkg=@$PKG_PATH" \
-            -F "app=@$APP_PATH" 
+            -F "app=@$APP_PATH"
+
+      - name: Upload .pkg and .app to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ${{ env.PKG_PATH }}
+            ${{ env.APP_PATH }} 
