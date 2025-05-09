@@ -1,6 +1,7 @@
 # Cloudflare DNS Manager
 
 A native macOS application for managing multiple Cloudflare accounts, domains, and DNS records, built with Kivy and KivyMD.
+DEV
 
 ## Features
 
