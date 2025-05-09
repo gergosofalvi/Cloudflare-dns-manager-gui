@@ -28,7 +28,7 @@ from kivy.base import EventLoop
 import threading
 import webbrowser
 
-APP_VERSION = "0.0.1"
+APP_VERSION = "0.7.1"
 UPDATE_INFO_URL = "https://cfdnsmanager.geri.app/app/osx/update.json"
 
 CLOUDFLARE_API_BASE = "https://api.cloudflare.com/client/v4"
@@ -768,7 +768,7 @@ class DNSManager(BoxLayout):
         close_btn.bind(on_release=lambda i: popup.dismiss())
         # Frissítés ellenőrző gomb
         update_btn = Button(text="Check for updates", size_hint=(1, None), height=36, background_color=(0.2,0.6,1,1), color=CLOUDFLARE_WHITE, font_size=15)
-        update_btn.bind(on_release=lambda i: self.check_for_update())
+        update_btn.bind(on_release=lambda i: self.check_for_update(show_popup_if_latest=True))
         layout.add_widget(update_btn)
         layout.add_widget(close_btn)
 
@@ -952,7 +952,7 @@ class DNSManager(BoxLayout):
         popup.content = layout
         popup.open()
 
-    def check_for_update(self):
+    def check_for_update(self, show_popup_if_latest=False):
         from kivy.clock import Clock
         def do_check():
             import requests
@@ -961,17 +961,19 @@ class DNSManager(BoxLayout):
                 if resp.ok:
                     data = resp.json()
                     latest_version = data.get("version", "0.0.0")
-                    pkg_url = data.get("pkg_url", "")
+                    # Elfogadja a pkg_url, app_url vagy dmg_url kulcsot is
+                    pkg_url = data.get("pkg_url", "") or data.get("dmg_url", "")
                     app_url = data.get("app_url", "")
                     if self._is_newer_version(latest_version, APP_VERSION):
                         Clock.schedule_once(lambda dt: self._show_update_popup(latest_version, pkg_url, app_url))
-                    else:
+                    elif show_popup_if_latest:
                         Clock.schedule_once(lambda dt: self._show_update_popup(latest_version, None, None, up_to_date=True))
                 else:
                     Clock.schedule_once(lambda dt: self._show_update_popup(None, None, None, failed=True, fail_reason=f"HTTP error: {resp.status_code}"))
             except Exception as exc:
                 fail_reason = str(exc)
                 Clock.schedule_once(lambda dt: self._show_update_popup(None, None, None, failed=True, fail_reason=fail_reason))
+        import threading
         threading.Thread(target=do_check, daemon=True).start()
 
     def _is_newer_version(self, latest, current):
@@ -1000,7 +1002,7 @@ class DNSManager(BoxLayout):
         btn_row = BoxLayout(orientation='horizontal', spacing=12, size_hint=(1, None), height=44)
         if not failed and latest_version and (pkg_url or app_url):
             if pkg_url:
-                download_btn = Button(text="Download .pkg", size_hint=(1, 1), background_color=(0.2,0.6,1,1), color=CLOUDFLARE_WHITE, font_size=16)
+                download_btn = Button(text="Download latest", size_hint=(1, 1), background_color=(0.2,0.6,1,1), color=CLOUDFLARE_WHITE, font_size=16)
                 def on_download(inst):
                     import webbrowser
                     webbrowser.open(pkg_url)
@@ -1120,7 +1122,8 @@ class CloudflareDNSApp(App):
         Window.bind(on_resize=self._on_window_resize)
         Window.bind(on_move=self._on_window_move)
         manager = DNSManager()
-        manager.check_for_update()  # Indításkor ellenőrizze a frissítést
+        # Indításkor automatikusan ellenőrizze a frissítést, de csak akkor mutasson popupot, ha van új verzió vagy hiba
+        manager.check_for_update(show_popup_if_latest=False)
         return manager
 
     def _on_keyboard(self, window, key, scancode, codepoint, modifier):
