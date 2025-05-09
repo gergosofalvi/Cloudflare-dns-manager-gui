@@ -28,18 +28,22 @@ jobs:
           VERSION=${GITHUB_REF#refs/tags/}
           echo "$VERSION" > APP_VERSION.txt
 
-      - name: Build app with PyInstaller
+      - name: Build app and pkg
         run: |
-          # Feltételezzük, hogy van builder.sh vagy .spec file
-          bash builder.sh
-
-      - name: Find built .pkg and .app files
-        id: find_files
-        run: |
-          PKG_PATH=$(find . -name 'CloudflareDNSManager*.pkg' | head -n 1)
-          APP_PATH=$(find . -name '*.app' | head -n 1)
-          echo "PKG_PATH=$PKG_PATH" >> $GITHUB_ENV
-          echo "APP_PATH=$APP_PATH" >> $GITHUB_ENV
+          VERSION=$(cat APP_VERSION.txt)
+          pyinstaller --windowed --noconfirm --clean \
+            --name "Cloudflare DNS Manager" \
+            --icon Cloudflare32px.icns \
+            --add-data "Cloudflare32px.png:." \
+            --add-data "Cloudflare32px_gray.png:." \
+            kivyapp.py
+          rm -rf pkgroot/Applications/Cloudflare\ DNS\ Manager.app
+          mkdir -p pkgroot/Applications
+          cp -R "dist/Cloudflare DNS Manager.app" pkgroot/Applications/
+          PKG_NAME="CloudflareDNSManager_${VERSION}.pkg"
+          pkgbuild --root pkgroot --install-location / --identifier com.cloudflare.dnsmanager --version "$VERSION" "$PKG_NAME"
+          echo "PKG_PATH=$PKG_NAME" >> $GITHUB_ENV
+          echo "APP_PATH=dist/Cloudflare DNS Manager.app" >> $GITHUB_ENV
 
       - name: Extract version from tag
         id: get_version
@@ -69,4 +73,4 @@ jobs:
         with:
           files: |
             ${{ env.PKG_PATH }}
-            ${{ env.APP_PATH }} 
+            "${{ env.APP_PATH }}" 
