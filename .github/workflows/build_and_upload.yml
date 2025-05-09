@@ -28,18 +28,15 @@ jobs:
       - name: Get version from branch or tag
         id: get_version
         run: |
-          if [[ "$GITHUB_REF" == refs/heads/build/* ]]; then
-            VERSION=${GITHUB_REF#refs/heads/build/}
-          else
-            VERSION=${GITHUB_REF#refs/tags/}
-          fi
+          VERSION=${GITHUB_REF#refs/tags/}
           echo "VERSION=$VERSION" >> $GITHUB_ENV
           echo "$VERSION" > APP_VERSION.txt
 
       - name: Set version in kivyapp.py
         run: |
           VERSION=${GITHUB_REF#refs/tags/}
-          sed -i '' "s/^APP_VERSION = .*/APP_VERSION = \"$VERSION\"  # Ez a sor lesz build előtt cserélve/" kivyapp.py
+          sed -i '' "s/^APP_VERSION = .*/APP_VERSION = \"$VERSION\"/" kivyapp.py
+          cat kivyapp.py | grep APP_VERSION
 
       - name: Build app and pkg
         run: |

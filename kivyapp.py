@@ -28,7 +28,7 @@ from kivy.base import EventLoop
 import threading
 import webbrowser
 
-APP_VERSION = "0.0.1"  # Ez a sor lesz build előtt cserélve
+APP_VERSION = "0.0.1"
 UPDATE_INFO_URL = "https://cfdnsmanager.geri.app/app/osx/update.json"
 
 CLOUDFLARE_API_BASE = "https://api.cloudflare.com/client/v4"
