@@ -13,6 +13,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-tags: true
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -28,7 +30,9 @@ jobs:
 
       - name: Set version in kivyapp.py
         run: |
+          echo "GITHUB_REF: $GITHUB_REF"
           VERSION=${GITHUB_REF#refs/tags/}
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
           sed -i '' "s/^APP_VERSION = .*/APP_VERSION = \"$VERSION\"/" kivyapp.py
           cat kivyapp.py | grep APP_VERSION
 
@@ -67,8 +71,13 @@ jobs:
           DMG_PATH: ${{ env.DMG_PATH }}
           VERSION: ${{ env.VERSION }}
         run: |
+          echo "Uploading version: $VERSION, DMG: $DMG_PATH"
           if [ -z "$DMG_PATH" ]; then
             echo "No .dmg file found!"
+            exit 1
+          fi
+          if [ -z "$VERSION" ]; then
+            echo "No version found!"
             exit 1
           fi
           curl -X POST https://cfdnsmanager.geri.app/upload \
