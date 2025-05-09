@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environment
+venv/
+
+# macOS system files
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+.Spotlight-V100
+.Trashes
+
+# Build and distribution
+build/
+dist/
+pkgroot/
+*.spec
+*.log
+
+# Installer output
+CloudflareDNSManager.pkg
+
+# Editor/IDE
+*.swp
+*.swo
+*.bak
+*.tmp
+
+# PyInstaller
+*.manifest
+*.spec 
