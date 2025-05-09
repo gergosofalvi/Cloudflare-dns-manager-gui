@@ -36,6 +36,11 @@ jobs:
           echo "VERSION=$VERSION" >> $GITHUB_ENV
           echo "$VERSION" > APP_VERSION.txt
 
+      - name: Set version in kivyapp.py
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          sed -i '' "s/^APP_VERSION = .*/APP_VERSION = \"$VERSION\"  # Ez a sor lesz build előtt cserélve/" kivyapp.py
+
       - name: Build app and pkg
         run: |
           VERSION=$(cat APP_VERSION.txt)

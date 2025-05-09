@@ -28,14 +28,7 @@ from kivy.base import EventLoop
 import threading
 import webbrowser
 
-def get_app_version():
-    try:
-        with open(os.path.join(os.path.dirname(__file__), 'APP_VERSION.txt'), 'r') as f:
-            return f.read().strip()
-    except Exception:
-        return "0.3.0"  # fallback default
-
-APP_VERSION = get_app_version()
+APP_VERSION = "0.0.1"  # Ez a sor lesz build előtt cserélve
 UPDATE_INFO_URL = "https://cfdnsmanager.geri.app/app/osx/update.json"
 
 CLOUDFLARE_API_BASE = "https://api.cloudflare.com/client/v4"
