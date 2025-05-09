@@ -22,9 +22,13 @@ dist/
 pkgroot/
 *.spec
 *.log
+installer_dmg/
+Applications
 
 # Installer output
 CloudflareDNSManager.pkg
+CloudflareDNSManager.dmg
+*.dmg
 
 # Editor/IDE
 *.swp

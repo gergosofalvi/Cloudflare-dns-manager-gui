@@ -1,4 +1,4 @@
-name: Build and Upload macOS ARM .pkg
+name: Build and Upload macOS DMG
 
 on:
   push:
@@ -8,7 +8,7 @@ on:
       - 'build/*'
 
 jobs:
-  build-macos-arm:
+  build-macos-dmg:
     runs-on: macos-latest
     steps:
       - name: Checkout code
@@ -24,13 +24,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pyinstaller
-
-      - name: Get version from branch or tag
-        id: get_version
-        run: |
-          VERSION=${GITHUB_REF#refs/tags/}
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
-          echo "$VERSION" > APP_VERSION.txt
+          brew install create-dmg
 
       - name: Set version in kivyapp.py
         run: |
@@ -38,52 +32,46 @@ jobs:
           sed -i '' "s/^APP_VERSION = .*/APP_VERSION = \"$VERSION\"/" kivyapp.py
           cat kivyapp.py | grep APP_VERSION
 
-      - name: Build app and pkg
+      - name: Build app
         run: |
-          VERSION=$(cat APP_VERSION.txt)
           pyinstaller --windowed --noconfirm --clean \
             --name "Cloudflare DNS Manager" \
             --icon Cloudflare32px.icns \
             --add-data "Cloudflare32px.png:." \
             --add-data "Cloudflare32px_gray.png:." \
             kivyapp.py
-          rm -rf pkgroot/Applications/Cloudflare\ DNS\ Manager.app
-          mkdir -p pkgroot/Applications
-          cp -R "dist/Cloudflare DNS Manager.app" pkgroot/Applications/
-          PKG_NAME="CloudflareDNSManager_${VERSION}.pkg"
-          pkgbuild --root pkgroot --install-location / --identifier com.cloudflare.dnsmanager --version "$VERSION" "$PKG_NAME"
-          echo "PKG_PATH=$PKG_NAME" >> $GITHUB_ENV
-          echo "APP_PATH=dist/Cloudflare DNS Manager.app" >> $GITHUB_ENV
 
-      - name: Zip .app bundle
+      - name: Prepare DMG folder
         run: |
-          cd dist
-          zip -r "Cloudflare DNS Manager.app.zip" "Cloudflare DNS Manager.app"
-          echo "APP_ZIP_PATH=dist/Cloudflare DNS Manager.app.zip" >> $GITHUB_ENV
+          rm -rf installer_dmg
+          mkdir -p installer_dmg
+          cp -R "dist/Cloudflare DNS Manager.app" installer_dmg/
+          ln -s /Applications installer_dmg/Applications
 
-      - name: Create and push tag if on build/* branch
-        if: startsWith(github.ref, 'refs/heads/build/')
-        env:
-          VERSION: ${{ env.VERSION }}
+      - name: Create DMG
         run: |
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
-          git tag "$VERSION"
-          git push origin "$VERSION"
+          create-dmg \
+            --volname "Cloudflare DNS Manager" \
+            --window-size 500 300 \
+            --icon-size 120 \
+            --icon "Cloudflare DNS Manager.app" 100 120 \
+            --icon "Applications" 380 120 \
+            --app-drop-link 380 120 \
+            CloudflareDNSManager.dmg \
+            installer_dmg/
+          echo "DMG_PATH=CloudflareDNSManager.dmg" >> $GITHUB_ENV
 
-      - name: Upload .pkg and .app.zip to update server
+      - name: Upload DMG to update server
         env:
           UPLOAD_KEY: ${{ secrets.UPLOAD_KEY }}
-          PKG_PATH: ${{ env.PKG_PATH }}
-          APP_ZIP_PATH: ${{ env.APP_ZIP_PATH }}
+          DMG_PATH: ${{ env.DMG_PATH }}
           VERSION: ${{ env.VERSION }}
         run: |
-          if [ -z "$PKG_PATH" ] || [ -z "$APP_ZIP_PATH" ]; then
-            echo "No .pkg or .app.zip file found!"
+          if [ -z "$DMG_PATH" ]; then
+            echo "No .dmg file found!"
             exit 1
           fi
           curl -X POST https://cfdnsmanager.geri.app/upload \
             -F "key=$UPLOAD_KEY" \
             -F "version=$VERSION" \
-            -F "pkg=@$PKG_PATH" \
-            -F "app=@$APP_ZIP_PATH" 
+            -F "dmg=@$DMG_PATH" 
