@@ -23,6 +23,8 @@ from kivy.core.window import Window
 from kivy.uix.image import Image
 from kivy.uix.dropdown import DropDown
 import sys
+from kivy.utils import get_color_from_hex
+from kivy.base import EventLoop
 
 CLOUDFLARE_API_BASE = "https://api.cloudflare.com/client/v4"
 API_TOKEN_FILE = os.path.join(
@@ -32,6 +34,14 @@ API_TOKEN_FILE = os.path.join(
 RECORD_TYPES = [
     "A", "AAAA", "CNAME", "MX", "TXT", "SRV", "NS", "PTR", "CAA", "DNSKEY", "DS", "NAPTR", "SMIMEA", "SSHFP", "TLSA", "URI"
 ]
+
+# --- Cloudflare színek és glassmorphism stílus ---
+CLOUDFLARE_ORANGE = get_color_from_hex("#F38020")
+CLOUDFLARE_DARK_BG = get_color_from_hex("#181A20")
+CLOUDFLARE_DARKER = get_color_from_hex("#222222")
+CLOUDFLARE_LIGHT = get_color_from_hex("#EEEEEE")
+CLOUDFLARE_WHITE = get_color_from_hex("#FFFFFF")
+GLASS_ALPHA = 0.18  # áttetszőség mértéke
 
 def get_headers(api_token):
     return {
@@ -45,13 +55,32 @@ def verify_token(account_id, api_token):
     return resp.ok
 
 def get_zones(api_token):
-    resp = requests.get(f"{CLOUDFLARE_API_BASE}/zones", headers=get_headers(api_token))
-    if resp.ok:
-        return resp.json()["result"]
-    return []
+    all_zones = []
+    page = 1
+    per_page = 1000
+    while True:
+        resp = requests.get(
+            f"{CLOUDFLARE_API_BASE}/zones",
+            headers=get_headers(api_token),
+            params={"page": page, "per_page": per_page}
+        )
+        if not resp.ok:
+            break
+        data = resp.json()
+        all_zones.extend(data["result"])
+        info = data.get("result_info", {})
+        if info.get("page", 1) >= info.get("total_pages", 1):
+            break
+        page += 1
+    return all_zones
 
 def get_dns_records(api_token, zone_id):
-    resp = requests.get(f"{CLOUDFLARE_API_BASE}/zones/{zone_id}/dns_records", headers=get_headers(api_token))
+    per_page = 5000  # maximum érték
+    resp = requests.get(
+        f"{CLOUDFLARE_API_BASE}/zones/{zone_id}/dns_records",
+        headers=get_headers(api_token),
+        params={"page": 1, "per_page": per_page}
+    )
     if resp.ok:
         return resp.json()["result"]
     return []
@@ -138,13 +167,27 @@ def resource_path(filename):
     # Fejlesztői futtatás
     return filename
 
+def glassmorphism_background(widget, radius=22, color=CLOUDFLARE_DARK_BG, alpha=GLASS_ALPHA):
+    from kivy.graphics import Color, RoundedRectangle
+    with widget.canvas.before:
+        Color(rgba=(color[0], color[1], color[2], alpha))
+        widget._glass_rect = RoundedRectangle(size=widget.size, pos=widget.pos, radius=[radius])
+    def update_rect(instance, value):
+        widget._glass_rect.size = widget.size
+        widget._glass_rect.pos = widget.pos
+    widget.bind(size=update_rect, pos=update_rect)
+
+# --- Fő háttér beállítása dark mode-ra ---
+Window.clearcolor = CLOUDFLARE_DARK_BG
+
 class LoadingPopup(ModalView):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.size_hint = (None, None)
         self.size = (120, 120)
         self.auto_dismiss = False
-        self.add_widget(Label(text="Loading...", font_size=20))
+        glassmorphism_background(self, radius=32, color=CLOUDFLARE_DARKER, alpha=0.32)
+        self.add_widget(Label(text="Loading...", font_size=20, color=CLOUDFLARE_LIGHT))
 
 class DNSManager(BoxLayout):
     error = StringProperty("")
@@ -185,21 +228,45 @@ class DNSManager(BoxLayout):
 
     def login_ui(self):
         self.clear_widgets()
-        box = BoxLayout(orientation='vertical', padding=20, spacing=10)
-        box.add_widget(Label(text="Cloudflare Account ID:"))
-        self.account_id_input = TextInput(multiline=False)
+        box = BoxLayout(orientation='vertical', padding=20, spacing=18)
+        glassmorphism_background(box, radius=28, color=CLOUDFLARE_DARKER, alpha=0.32)
+        box.add_widget(Label(text="Cloudflare Account ID:", color=CLOUDFLARE_LIGHT, font_size=17))
+        self.account_id_input = TextInput(multiline=False, background_color=(1,1,1,0.08), foreground_color=CLOUDFLARE_LIGHT, cursor_color=CLOUDFLARE_ORANGE, padding=[12,8,12,8], size_hint_y=None, height=40)
         box.add_widget(self.account_id_input)
-        box.add_widget(Label(text="Cloudflare API Token:"))
-        self.api_token_input = TextInput(password=True, multiline=False)
+        box.add_widget(Label(text="Cloudflare API Token:", color=CLOUDFLARE_LIGHT, font_size=17))
+        self.api_token_input = TextInput(password=True, multiline=False, background_color=(1,1,1,0.08), foreground_color=CLOUDFLARE_LIGHT, cursor_color=CLOUDFLARE_ORANGE, padding=[12,8,12,8], size_hint_y=None, height=40)
         box.add_widget(self.api_token_input)
-        box.add_widget(Label(text="Account label (e.g. work, personal, ...):"))
-        self.account_label_input = TextInput(multiline=False)
+        box.add_widget(Label(text="Account label (e.g. work, personal, ...):", color=CLOUDFLARE_LIGHT, font_size=17))
+        self.account_label_input = TextInput(multiline=False, background_color=(1,1,1,0.08), foreground_color=CLOUDFLARE_LIGHT, cursor_color=CLOUDFLARE_ORANGE, padding=[12,8,12,8], size_hint_y=None, height=40)
         box.add_widget(self.account_label_input)
-        self.error_label = Label(text=self.error, color=(1,0,0,1))
+        self.error_label = Label(text=self.error, color=(1,0.2,0.2,1), font_size=15)
         box.add_widget(self.error_label)
-        login_btn = Button(text="Add account", size_hint=(1, None), height=40)
+
+        login_btn = Button(
+            text="Add account",
+            size_hint=(1, None),
+            height=44,
+            background_normal='',
+            background_color=(CLOUDFLARE_ORANGE[0], CLOUDFLARE_ORANGE[1], CLOUDFLARE_ORANGE[2], 0.92),
+            color=CLOUDFLARE_WHITE,
+            font_size=18
+        )
+        # Tutorial gomb hozzáadása
+        tutorial_btn = Button(
+            text="Create Token Tutorial",
+            size_hint=(1, None),
+            height=38,
+            background_normal='',
+            background_color=(0.2,0.6,1,1),
+            color=CLOUDFLARE_WHITE,
+            font_size=15
+        )
+        tutorial_btn.bind(on_release=self.show_token_tutorial)
+
         login_btn.bind(on_release=self.try_login)
+        login_btn.background_radius = [18]
         box.add_widget(login_btn)
+        box.add_widget(tutorial_btn)
         self.add_widget(box)
 
     def try_login(self, instance):
@@ -232,36 +299,88 @@ class DNSManager(BoxLayout):
     def main_ui(self):
         self.clear_widgets()
         root = BoxLayout(orientation='vertical', padding=[dp(20), dp(20), dp(20), dp(20)], spacing=18)
+        glassmorphism_background(root, radius=32, color=CLOUDFLARE_DARKER, alpha=0.28)
         search_row = BoxLayout(orientation='vertical', size_hint=(1, None), height=54, spacing=0)
-        search_label = Label(text="Search:", font_size=16, color=(0.9,0.9,0.9,1), size_hint=(None, None), size=(90, 24))
+        glassmorphism_background(search_row, radius=18, color=CLOUDFLARE_DARK_BG, alpha=0.22)
+        search_label = Label(text="Search:", font_size=16, color=CLOUDFLARE_LIGHT, size_hint=(None, None), size=(90, 24))
         search_row.add_widget(search_label)
-        self.domain_search_input = TextInput(hint_text="Domain or account name...", multiline=False, size_hint=(1, None), height=30, font_size=16)
+        self.domain_search_input = TextInput(
+            hint_text="Domain or account name...",
+            multiline=False,
+            size_hint=(1, None),
+            height=38,
+            font_size=16,
+            background_color=(1,1,1,0.10),
+            foreground_color=CLOUDFLARE_LIGHT,
+            cursor_color=CLOUDFLARE_ORANGE,
+            padding=[12,8,12,8]
+        )
         self.domain_search_input.bind(focus=self._on_search_focus)
         self.domain_search_input.bind(text=self._on_domain_search)
         search_row.add_widget(self.domain_search_input)
         self._build_domain_dropdown()
         root.add_widget(search_row)
-        self.error_label = Label(text=self.error, color=(1,0,0,1), font_size=16, size_hint=(1, None), height=30)
+        self.error_label = Label(text=self.error, color=(1,0.2,0.2,1), font_size=16, size_hint=(1, None), height=30)
         root.add_widget(self.error_label)
         header_row = BoxLayout(orientation='horizontal', size_hint=(1, None), height=50, spacing=10)
-        cache_btn = Button(text="Clear cache", size_hint=(None, None), size=(150, 44), background_color=(0.25,0.25,0.35,1), color=(0.9,0.9,0.9,1), font_size=16)
+        glassmorphism_background(header_row, radius=18, color=CLOUDFLARE_DARK_BG, alpha=0.22)
+        cache_btn = Button(
+            text="Clear cache",
+            size_hint=(None, None),
+            size=(100, 44),
+            background_normal='',
+            background_color=(0.25,0.25,0.35,0.85),
+            color=CLOUDFLARE_LIGHT,
+            font_size=16
+        )
+        cache_btn.background_radius = [16]
         cache_btn.bind(on_release=self.cache_clear)
         header_row.add_widget(cache_btn)
-        add_btn = Button(text="Add record", size_hint=(None, None), size=(150, 44), background_color=(0.2,0.6,1,1), color=(1,1,1,1), font_size=16)
+        add_btn = Button(
+            text="Add record",
+            size_hint=(None, None),
+            size=(90, 44),
+            background_normal='',
+            background_color=(CLOUDFLARE_ORANGE[0], CLOUDFLARE_ORANGE[1], CLOUDFLARE_ORANGE[2], 0.92),
+            color=CLOUDFLARE_WHITE,
+            font_size=16
+        )
+        add_btn.background_radius = [16]
         add_btn.bind(on_release=self.add_record)
         header_row.add_widget(add_btn)
-        settings_btn = Button(size_hint=(None, None), size=(80, 44), background_normal='', background_color=(0.2,0.2,0.25,1), text='settings', font_size=18, color=(0.9,0.9,0.9,1))
+        settings_btn = Button(
+            size_hint=(None, None),
+            size=(85, 44),
+            background_normal='',
+            background_color=(0.2,0.2,0.25,0.85),
+            text='settings',
+            font_size=16,
+            color=CLOUDFLARE_LIGHT
+        )
+        settings_btn.background_radius = [16]
         settings_btn.bind(on_release=self.open_settings_popup)
         header_row.add_widget(settings_btn)
         root.add_widget(header_row)
         record_search_row = BoxLayout(orientation='horizontal', size_hint=(1, None), height=38, spacing=8)
-        record_search_label = Label(text="Record search:", font_size=15, color=(0.9,0.9,0.9,1), size_hint=(None, None), size=(120, 38))
-        self.record_search_input = TextInput(hint_text="Name or content...", multiline=False, size_hint=(1, None), height=32, font_size=15)
+        glassmorphism_background(record_search_row, radius=14, color=CLOUDFLARE_DARK_BG, alpha=0.18)
+        record_search_label = Label(text="Record search:", font_size=15, color=CLOUDFLARE_LIGHT, size_hint=(None, None), size=(120, 38))
+        self.record_search_input = TextInput(
+            hint_text="Name or content...",
+            multiline=False,
+            size_hint=(1, None),
+            height=32,
+            font_size=15,
+            background_color=(1,1,1,0.10),
+            foreground_color=CLOUDFLARE_LIGHT,
+            cursor_color=CLOUDFLARE_ORANGE,
+            padding=[12,8,12,8]
+        )
         self.record_search_input.bind(text=self._on_record_search)
         record_search_row.add_widget(record_search_label)
         record_search_row.add_widget(self.record_search_input)
         root.add_widget(record_search_row)
         table_section = BoxLayout(orientation='vertical', size_hint=(1, 1), padding=[0, 0, 0, 0])
+        glassmorphism_background(table_section, radius=24, color=CLOUDFLARE_DARK_BG, alpha=0.22)
         with table_section.canvas.before:
             Color(0.13,0.14,0.18,1)
             self._table_rect = Rectangle(size=table_section.size, pos=table_section.pos)
@@ -384,7 +503,7 @@ class DNSManager(BoxLayout):
     def edit_record(self, rec):
         from kivy.core.window import Window
         popup_width = max(350, min(700, int(Window.width * 0.8)))
-        popup = Popup(title="Edit DNS record", size_hint=(None, None), size=(popup_width, 540), auto_dismiss=False)
+        popup = Popup(title="Edit DNS record", size_hint=(None, None), size=(popup_width, 640), auto_dismiss=False)
         from kivy.uix.scrollview import ScrollView
         layout = BoxLayout(orientation='vertical', padding=20, spacing=12, size_hint_y=None)
         layout.bind(minimum_height=layout.setter('height'))
@@ -393,14 +512,14 @@ class DNSManager(BoxLayout):
         content_input = TextInput(text=rec["content"], multiline=False, size_hint=(1, None), height=40, font_size=15, padding=[8,8,8,8])
         ttl_input = TextInput(text=str(rec["ttl"]), multiline=False, size_hint=(1, None), height=40, font_size=15, padding=[8,8,8,8])
         from kivy.uix.togglebutton import ToggleButton
-        proxy_toggle = ToggleButton(text="Cloudflare proxy: ON" if rec.get("proxied") else "Cloudflare proxy: OFF", state="down" if rec.get("proxied") else "normal", size_hint=(1, None), height=40, background_normal='', background_color=(1,0.5,0,1) if rec.get("proxied") else (.8,.8,.8,1), font_size=15)
+        proxy_toggle = ToggleButton(text="Cloudflare proxy: ON" if rec.get("proxied") else "Cloudflare proxy: OFF", state="down" if rec.get("proxied") else "normal", size_hint=(1, None), height=40, background_normal='', background_color=(1,0.5,0,1) if rec.get("proxied") else (.3,.3,.3,1), font_size=15)
         def on_toggle(instance):
             if instance.state == "down":
                 instance.text = "Cloudflare proxy: ON"
                 instance.background_color = (1,0.5,0,1)
             else:
                 instance.text = "Cloudflare proxy: OFF"
-                instance.background_color = (.8,.8,.8,1)
+                instance.background_color = (.3,.3,.3,1)
         proxy_toggle.bind(on_press=on_toggle)
         error_label = Label(text="", color=(1,0,0,1), font_size=14, size_hint=(1, None), height=24)
         def on_save(instance):
@@ -458,7 +577,7 @@ class DNSManager(BoxLayout):
     def add_record(self, instance):
         from kivy.core.window import Window
         popup_width = max(350, min(700, int(Window.width * 0.8)))
-        popup = Popup(title="Add new DNS record", size_hint=(None, None), size=(popup_width, 540), auto_dismiss=False)
+        popup = Popup(title="Add new DNS record", size_hint=(None, None), size=(popup_width, 640), auto_dismiss=False)
         from kivy.uix.scrollview import ScrollView
         layout = BoxLayout(orientation='vertical', padding=20, spacing=12, size_hint_y=None)
         layout.bind(minimum_height=layout.setter('height'))
@@ -467,14 +586,14 @@ class DNSManager(BoxLayout):
         content_input = TextInput(hint_text="Content", multiline=False, size_hint=(1, None), height=40, font_size=15, padding=[8,8,8,8])
         ttl_input = TextInput(hint_text="TTL", text="3600", multiline=False, size_hint=(1, None), height=40, font_size=15, padding=[8,8,8,8])
         from kivy.uix.togglebutton import ToggleButton
-        proxy_toggle = ToggleButton(text="Cloudflare proxy: OFF", state="normal", size_hint=(1, None), height=40, background_normal='', background_color=(.8,.8,.8,1), font_size=15)
+        proxy_toggle = ToggleButton(text="Cloudflare proxy: OFF", state="normal", size_hint=(1, None), height=40, background_normal='', background_color=(.3,.3,.3,1), font_size=15)
         def on_toggle(instance):
             if instance.state == "down":
                 instance.text = "Cloudflare proxy: ON"
                 instance.background_color = (1,0.5,0,1)
             else:
                 instance.text = "Cloudflare proxy: OFF"
-                instance.background_color = (.8,.8,.8,1)
+                instance.background_color = (.3,.3,.3,1)
         proxy_toggle.bind(on_press=on_toggle)
         error_label = Label(text="", color=(1,0,0,1), font_size=14, size_hint=(1, None), height=24)
         def on_save(instance):
@@ -537,7 +656,7 @@ class DNSManager(BoxLayout):
     def open_settings_popup(self, instance):
         from kivy.core.window import Window
         popup_width = max(350, min(700, int(Window.width * 0.8)))
-        popup = Popup(title="Manage Cloudflare accounts", size_hint=(None, None), size=(popup_width, 540), auto_dismiss=False)
+        popup = Popup(title="Manage Cloudflare accounts", size_hint=(None, None), size=(popup_width, 650), auto_dismiss=False)
         from kivy.uix.scrollview import ScrollView
         layout = BoxLayout(orientation='vertical', padding=16, spacing=10, size_hint_y=None)
         layout.bind(minimum_height=layout.setter('height'))
@@ -556,15 +675,16 @@ class DNSManager(BoxLayout):
         from kivy.uix.boxlayout import BoxLayout
         # Header row
         header = BoxLayout(orientation='horizontal', size_hint=(1, None), height=30, spacing=8, padding=[0,0,0,0])
-        header.add_widget(Label(text="Label", font_size=14, bold=True, size_hint=(0.4, None), height=30))
-        header.add_widget(Label(text="Account ID", font_size=14, bold=True, size_hint=(0.4, None), height=30))
-        header.add_widget(Label(text="Actions", font_size=14, bold=True, size_hint=(0.2, None), height=30))
+        header.add_widget(Label(text="Label", font_size=16, bold=True, size_hint=(0.4, None), height=30))
+        header.add_widget(Label(text="Account ID", font_size=16, bold=True, size_hint=(0.4, None), height=30))
+        header.add_widget(Label(text="Actions", font_size=16, bold=True, size_hint=(0.2, None), height=30))
         layout.add_widget(header)
+
         # Account rows
         for idx, acc in enumerate(self.accounts):
             row = BoxLayout(orientation='horizontal', size_hint=(1, None), height=32, spacing=8, padding=[0,0,0,0])
-            acc_label = Label(text=acc.get('label', acc['account_id']), font_size=13, size_hint=(0.4, None), height=32)
-            acc_id = Label(text=acc.get('account_id', ''), font_size=13, size_hint=(0.4, None), height=32)
+            acc_label = Label(text=acc.get('label', acc['account_id']), font_size=14, size_hint=(0.4, None), height=32)
+            acc_id = Label(text=acc.get('account_id', ''), font_size=14, size_hint=(0.4, None), height=32)
             actions = BoxLayout(orientation='horizontal', size_hint=(0.2, None), height=32, spacing=4)
             edit_btn = Button(size_hint=(None, None), size=(50, 28), background_normal='', background_color=(0.2,0.6,1,1), text='edit', font_size=14, color=(1,1,1,1))
             edit_btn.bind(on_release=lambda inst, i=idx: self._edit_account_popup(i, layout, popup))
@@ -585,12 +705,24 @@ class DNSManager(BoxLayout):
             self._settings_popup_refresh(layout, popup)
         add_btn.bind(on_release=on_add)
         layout.add_widget(add_btn)
+                # Tutorial gomb hozzáadása a header után
+        tutorial_btn = Button(
+            text="Create Token Tutorial",
+            size_hint=(1, None),
+            height=32,
+            background_normal='',
+            background_color=(0.2,0.6,1,1),
+            color=CLOUDFLARE_WHITE,
+            font_size=15
+        )
+        tutorial_btn.bind(on_release=self.show_token_tutorial)
+        layout.add_widget(tutorial_btn)
         # Add account fields
         if getattr(self, 'add_account_fields_visible', False):
             acc_id_input = TextInput(hint_text="Account ID", multiline=False, size_hint=(1, None), height=36, font_size=15)
             token_input = TextInput(hint_text="API Token", multiline=False, password=True, size_hint=(1, None), height=36, font_size=15)
             label_input = TextInput(hint_text="Account label (e.g. work, personal, ...)", multiline=False, size_hint=(1, None), height=36, font_size=15)
-            error_label = Label(text="", color=(1,0,0,1), font_size=13, size_hint=(1, None), height=20)
+            error_label = Label(text="", color=(1,0,0,1), font_size=14, size_hint=(1, None), height=20)
             def on_save(instance):
                 acc_id = acc_id_input.text.strip()
                 token = token_input.text.strip()
@@ -643,7 +775,7 @@ class DNSManager(BoxLayout):
         acc = self.accounts[idx]
         from kivy.core.window import Window
         popup_width = max(350, min(700, int(Window.width * 0.8)))
-        popup = Popup(title="Edit account", size_hint=(None, None), size=(popup_width, 340), auto_dismiss=False)
+        popup = Popup(title="Edit account", size_hint=(None, None), size=(popup_width, 500), auto_dismiss=False)
         from kivy.uix.scrollview import ScrollView
         layout = BoxLayout(orientation='vertical', padding=20, spacing=12, size_hint_y=None)
         layout.bind(minimum_height=layout.setter('height'))
@@ -773,10 +905,46 @@ class DNSManager(BoxLayout):
         from kivy.clock import Clock
         Clock.schedule_once(lambda dt: toast.dismiss(), 2)
 
+    def show_token_tutorial(self, *args):
+        tutorial_text = (
+            "How to create a Cloudflare API Token for this app:\n\n"
+            "1. Log in to your Cloudflare dashboard.\n"
+            "2. Go to 'Manage Account' > 'Account API Tokens'.\n"
+            "3. Click the 'Create Token' button.\n"
+            "4. At the bottom, select 'Create Custom Token'.\n"
+            "5. Token name: Any name, e.g. 'Cloudflare DNS Manager GUI'.\n"
+            "6. Permissions: Add two permissions:\n"
+            "   - Zone - DNS - Edit\n"
+            "   - Zone - Cache Purge - Purge\n"
+            "7. Zone Resources: Include - All zones from your account.\n"
+            "8. Click 'Continue to Summary', then 'Create Token'.\n"
+            "9. Copy the generated Token.\n"
+            "10. On the token page, you will also see a 'test this token' section.\n"
+            "    The URL will look like: https://api.cloudflare.com/client/v4/accounts/123asd123asd123asd123asd123asd123/tokens/verify\n"
+            "    The part after /accounts/ is your Account ID.\n"
+            "\nPaste the Token and Account ID into the app.\n"
+        )
+        popup = Popup(title="Create Token Tutorial", size_hint=(None, None), size=(580, 560), auto_dismiss=True)
+        layout = BoxLayout(orientation='vertical', padding=20, spacing=12)
+        from kivy.uix.label import Label
+        from kivy.uix.scrollview import ScrollView
+        label = Label(text=tutorial_text, color=CLOUDFLARE_LIGHT, font_size=15, halign='left', valign='top', text_size=(480, None))
+        label.bind(texture_size=lambda instance, value: setattr(label, 'height', value[1]))
+        scroll = ScrollView(size_hint=(1, 1))
+        scroll.add_widget(label)
+        layout.add_widget(scroll)
+        close_btn = Button(text="Close", size_hint=(1, None), height=40, background_color=(.7,.7,.7,1), font_size=15)
+        close_btn.bind(on_release=lambda i: popup.dismiss())
+        layout.add_widget(close_btn)
+        popup.content = layout
+        popup.open()
+
 class CloudflareDNSApp(App):
     icon = resource_path('Cloudflare32px.icns')  # Dock és tálca ikon beállítása
     def build(self):
         from kivy.core.window import Window  # Import Window at the start of build
+        # ESC gomb letiltása főablakra
+        Window.bind(on_keyboard=self._on_keyboard)
         # Ablak méret/pozíció visszaállítása
         win_settings = load_window_settings()
         if win_settings:
@@ -794,6 +962,17 @@ class CloudflareDNSApp(App):
         Window.bind(on_resize=self._on_window_resize)
         Window.bind(on_move=self._on_window_move)
         return DNSManager()
+
+    def _on_keyboard(self, window, key, scancode, codepoint, modifier):
+        # 27 az ESC gomb
+        if key == 27:
+            # Ha van nyitott popup, azt zárja be, de ne lépjen ki az appból
+            for w in EventLoop.window.children[:]:
+                if hasattr(w, 'dismiss') and getattr(w, 'auto_dismiss', False):
+                    w.dismiss()
+                    return True  # Ne lépjen ki
+            return True  # Ne lépjen ki
+        return False
 
     def _on_window_resize(self, instance, width, height):
         from kivy.core.window import Window
