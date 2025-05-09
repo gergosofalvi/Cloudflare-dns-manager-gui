@@ -968,16 +968,17 @@ class DNSManager(BoxLayout):
                 if resp.ok:
                     data = resp.json()
                     latest_version = data.get("version", "0.0.0")
-                    download_url = data.get("download_url", "")
+                    pkg_url = data.get("pkg_url", "")
+                    app_url = data.get("app_url", "")
                     if self._is_newer_version(latest_version, APP_VERSION):
-                        Clock.schedule_once(lambda dt: self._show_update_popup(latest_version, download_url))
+                        Clock.schedule_once(lambda dt: self._show_update_popup(latest_version, pkg_url, app_url))
                     else:
-                        Clock.schedule_once(lambda dt: self._show_update_popup(latest_version, None, up_to_date=True))
+                        Clock.schedule_once(lambda dt: self._show_update_popup(latest_version, None, None, up_to_date=True))
                 else:
-                    Clock.schedule_once(lambda dt: self._show_update_popup(None, None, failed=True, fail_reason=f"HTTP error: {resp.status_code}"))
+                    Clock.schedule_once(lambda dt: self._show_update_popup(None, None, None, failed=True, fail_reason=f"HTTP error: {resp.status_code}"))
             except Exception as exc:
                 fail_reason = str(exc)
-                Clock.schedule_once(lambda dt: self._show_update_popup(None, None, failed=True, fail_reason=fail_reason))
+                Clock.schedule_once(lambda dt: self._show_update_popup(None, None, None, failed=True, fail_reason=fail_reason))
         threading.Thread(target=do_check, daemon=True).start()
 
     def _is_newer_version(self, latest, current):
@@ -985,7 +986,7 @@ class DNSManager(BoxLayout):
             return [int(x) for x in v.split(".")]
         return parse(latest) > parse(current)
 
-    def _show_update_popup(self, latest_version, download_url, up_to_date=False, failed=False, fail_reason=None):
+    def _show_update_popup(self, latest_version, pkg_url, app_url, up_to_date=False, failed=False, fail_reason=None):
         from kivy.uix.popup import Popup
         from kivy.uix.boxlayout import BoxLayout
         from kivy.uix.label import Label
@@ -998,25 +999,86 @@ class DNSManager(BoxLayout):
             layout.add_widget(Label(text=msg, font_size=16, color=(1,0.3,0.3,1)))
         elif up_to_date:
             layout.add_widget(Label(text="You have the latest version.", font_size=17, color=(0.2,0.8,0.2,1)))
-        elif latest_version and download_url:
+        elif latest_version and (pkg_url or app_url):
             layout.add_widget(Label(text=f"New version available: {latest_version}", font_size=17, color=(0.2,0.6,1,1)))
             layout.add_widget(Label(text=f"Current version: {APP_VERSION}", font_size=15, color=CLOUDFLARE_LIGHT))
         else:
             layout.add_widget(Label(text="Unknown update status.", font_size=17, color=(1,0.3,0.3,1)))
         btn_row = BoxLayout(orientation='horizontal', spacing=12, size_hint=(1, None), height=44)
-        if not failed and latest_version and download_url:
-            download_btn = Button(text="Download update", size_hint=(1, 1), background_color=(0.2,0.6,1,1), color=CLOUDFLARE_WHITE, font_size=16)
-            def on_download(inst):
-                webbrowser.open(download_url)
-            download_btn.bind(on_release=on_download)
-            btn_row.add_widget(download_btn)
+        if not failed and latest_version and (pkg_url or app_url):
+            if pkg_url:
+                download_btn = Button(text="Download .pkg", size_hint=(1, 1), background_color=(0.2,0.6,1,1), color=CLOUDFLARE_WHITE, font_size=16)
+                def on_download(inst):
+                    import webbrowser
+                    webbrowser.open(pkg_url)
+                download_btn.bind(on_release=on_download)
+                btn_row.add_widget(download_btn)
+            if app_url:
+                update_btn = Button(text="Update now (in-app)", size_hint=(1, 1), background_color=(0.2,0.8,0.2,1), color=CLOUDFLARE_WHITE, font_size=16)
+                update_btn.bind(on_release=lambda inst: self._in_app_update(app_url))
+                btn_row.add_widget(update_btn)
         close_btn = Button(text="Close", size_hint=(1, 1), background_color=(.7,.7,.7,1), font_size=16)
         close_btn.bind(on_release=lambda i: popup.dismiss())
         btn_row.add_widget(close_btn)
         layout.add_widget(btn_row)
-        popup = Popup(title="Update", size_hint=(None, None), size=(420, 220), auto_dismiss=True)
+        popup = Popup(title="Update", size_hint=(None, None), size=(480, 240), auto_dismiss=True)
         popup.content = layout
         popup.open()
+
+    def _in_app_update(self, app_url):
+        import tempfile
+        import shutil
+        import os
+        import sys
+        from kivy.uix.popup import Popup
+        from kivy.uix.boxlayout import BoxLayout
+        from kivy.uix.label import Label
+        from kivy.uix.button import Button
+        layout = BoxLayout(orientation='vertical', padding=20, spacing=16)
+        layout.add_widget(Label(text="Downloading new version...", font_size=16, color=CLOUDFLARE_LIGHT))
+        popup = Popup(title="Updating...", size_hint=(None, None), size=(420, 160), auto_dismiss=False)
+        popup.content = layout
+        popup.open()
+        def do_update():
+            import requests
+            try:
+                tmp_dir = tempfile.mkdtemp()
+                app_name = os.path.basename(app_url).replace("%20", " ")
+                local_app_path = os.path.join(tmp_dir, app_name)
+                with requests.get(app_url, stream=True) as r:
+                    r.raise_for_status()
+                    with open(local_app_path, 'wb') as f:
+                        for chunk in r.iter_content(chunk_size=8192):
+                            f.write(chunk)
+                # Applications mappa
+                target_dir = "/Applications"
+                target_app_path = os.path.join(target_dir, app_name)
+                # Biztonsági mentés a régiről (opcionális)
+                # shutil.move(target_app_path, target_app_path + ".bak")
+                # Másolás (felülírás)
+                if os.path.exists(target_app_path):
+                    shutil.rmtree(target_app_path)
+                shutil.copytree(local_app_path, target_app_path)
+                # Siker popup
+                def on_restart(inst):
+                    popup.dismiss()
+                    os.execv(target_app_path + "/Contents/MacOS/Cloudflare DNS Manager", sys.argv)
+                layout.clear_widgets()
+                layout.add_widget(Label(text="Update complete! Please restart the app.", font_size=16, color=(0.2,0.8,0.2,1)))
+                restart_btn = Button(text="Restart now", size_hint=(1, None), height=40, background_color=(0.2,0.6,1,1), color=CLOUDFLARE_WHITE, font_size=15)
+                restart_btn.bind(on_release=on_restart)
+                layout.add_widget(restart_btn)
+                close_btn = Button(text="Close", size_hint=(1, None), height=40, background_color=(.7,.7,.7,1), font_size=15)
+                close_btn.bind(on_release=lambda i: popup.dismiss())
+                layout.add_widget(close_btn)
+            except Exception as exc:
+                layout.clear_widgets()
+                layout.add_widget(Label(text=f"Update failed: {exc}", font_size=15, color=(1,0.3,0.3,1)))
+                close_btn = Button(text="Close", size_hint=(1, None), height=40, background_color=(.7,.7,.7,1), font_size=15)
+                close_btn.bind(on_release=lambda i: popup.dismiss())
+                layout.add_widget(close_btn)
+        import threading
+        threading.Thread(target=do_update, daemon=True).start()
 
     def show_about_popup(self, *args):
         from kivy.uix.popup import Popup

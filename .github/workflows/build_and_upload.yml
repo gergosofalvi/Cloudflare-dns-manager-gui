@@ -33,11 +33,13 @@ jobs:
           # Feltételezzük, hogy van builder.sh vagy .spec file
           bash builder.sh
 
-      - name: Find built .pkg file
-        id: find_pkg
+      - name: Find built .pkg and .app files
+        id: find_files
         run: |
           PKG_PATH=$(find . -name 'CloudflareDNSManager*.pkg' | head -n 1)
+          APP_PATH=$(find . -name '*.app' | head -n 1)
           echo "PKG_PATH=$PKG_PATH" >> $GITHUB_ENV
+          echo "APP_PATH=$APP_PATH" >> $GITHUB_ENV
 
       - name: Extract version from tag
         id: get_version
@@ -45,17 +47,19 @@ jobs:
           VERSION=${GITHUB_REF#refs/tags/}
           echo "VERSION=$VERSION" >> $GITHUB_ENV
 
-      - name: Upload .pkg to update server
+      - name: Upload .pkg and .app to update server
         env:
           UPLOAD_KEY: ${{ secrets.UPLOAD_KEY }}
           PKG_PATH: ${{ env.PKG_PATH }}
+          APP_PATH: ${{ env.APP_PATH }}
           VERSION: ${{ env.VERSION }}
         run: |
-          if [ -z "$PKG_PATH" ]; then
-            echo "No .pkg file found!"
+          if [ -z "$PKG_PATH" ] || [ -z "$APP_PATH" ]; then
+            echo "No .pkg or .app file found!"
             exit 1
           fi
           curl -X POST https://cfdnsmanager.geri.app/upload \
             -F "key=$UPLOAD_KEY" \
             -F "version=$VERSION" \
-            -F "file=@$PKG_PATH" 
+            -F "pkg=@$PKG_PATH" \
+            -F "app=@$APP_PATH" 
