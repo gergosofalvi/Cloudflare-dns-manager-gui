@@ -3,3 +3,4 @@ watchdog
 kivy
 requests
 kivymd
+pyinstaller
