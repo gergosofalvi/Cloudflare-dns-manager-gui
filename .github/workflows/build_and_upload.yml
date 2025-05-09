@@ -3,7 +3,9 @@ name: Build and Upload macOS ARM .pkg
 on:
   push:
     tags:
-      - '[0-9]+.[0-9]+.[0-9]+'  # Szemantikus verzió tag pl. 0.4.0 vagy 1.2.3
+      - '[0-9]+.[0-9]+.[0-9]+'
+    branches:
+      - 'build/*'
 
 jobs:
   build-macos-arm:
@@ -23,9 +25,15 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
-      - name: Write version to APP_VERSION.txt
+      - name: Get version from branch or tag
+        id: get_version
         run: |
-          VERSION=${GITHUB_REF#refs/tags/}
+          if [[ "$GITHUB_REF" == refs/heads/build/* ]]; then
+            VERSION=${GITHUB_REF#refs/heads/build/}
+          else
+            VERSION=${GITHUB_REF#refs/tags/}
+          fi
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
           echo "$VERSION" > APP_VERSION.txt
 
       - name: Build app and pkg
@@ -45,32 +53,46 @@ jobs:
           echo "PKG_PATH=$PKG_NAME" >> $GITHUB_ENV
           echo "APP_PATH=dist/Cloudflare DNS Manager.app" >> $GITHUB_ENV
 
-      - name: Extract version from tag
-        id: get_version
+      - name: Zip .app bundle
         run: |
-          VERSION=${GITHUB_REF#refs/tags/}
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          cd dist
+          zip -r "Cloudflare DNS Manager.app.zip" "Cloudflare DNS Manager.app"
+          echo "APP_ZIP_PATH=dist/Cloudflare DNS Manager.app.zip" >> $GITHUB_ENV
 
-      - name: Upload .pkg and .app to update server
+      - name: Create and push tag if on build/* branch
+        if: startsWith(github.ref, 'refs/heads/build/')
+        env:
+          VERSION: ${{ env.VERSION }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git tag "$VERSION"
+          git push origin "$VERSION"
+          git checkout main
+          git merge "$VERSION" || true
+          git push origin main
+
+      - name: Upload .pkg and .app.zip to update server
         env:
           UPLOAD_KEY: ${{ secrets.UPLOAD_KEY }}
           PKG_PATH: ${{ env.PKG_PATH }}
-          APP_PATH: ${{ env.APP_PATH }}
+          APP_ZIP_PATH: ${{ env.APP_ZIP_PATH }}
           VERSION: ${{ env.VERSION }}
         run: |
-          if [ -z "$PKG_PATH" ] || [ -z "$APP_PATH" ]; then
-            echo "No .pkg or .app file found!"
+          if [ -z "$PKG_PATH" ] || [ -z "$APP_ZIP_PATH" ]; then
+            echo "No .pkg or .app.zip file found!"
             exit 1
           fi
           curl -X POST https://cfdnsmanager.geri.app/upload \
             -F "key=$UPLOAD_KEY" \
             -F "version=$VERSION" \
             -F "pkg=@$PKG_PATH" \
-            -F "app=@$APP_PATH"
+            -F "app=@$APP_ZIP_PATH"
 
-      - name: Upload .pkg and .app to GitHub Release
+      - name: Upload .pkg and .app.zip to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
             ${{ env.PKG_PATH }}
-            "${{ env.APP_PATH }}" 
+            ${{ env.APP_ZIP_PATH }} 
