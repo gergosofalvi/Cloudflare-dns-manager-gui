@@ -1,0 +1,61 @@
+name: Build and Upload macOS ARM .pkg
+
+on:
+  push:
+    tags:
+      - 'v*'  # Csak verzió tagre buildel (pl. v0.3.0)
+
+jobs:
+  build-macos-arm:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Write version to APP_VERSION.txt
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "$VERSION" > APP_VERSION.txt
+
+      - name: Build app with PyInstaller
+        run: |
+          # Feltételezzük, hogy van builder.sh vagy .spec file
+          bash builder.sh
+
+      - name: Find built .pkg file
+        id: find_pkg
+        run: |
+          PKG_PATH=$(find . -name 'CloudflareDNSManager*.pkg' | head -n 1)
+          echo "PKG_PATH=$PKG_PATH" >> $GITHUB_ENV
+
+      - name: Extract version from tag
+        id: get_version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+      - name: Upload .pkg to update server
+        env:
+          UPLOAD_KEY: ${{ secrets.UPLOAD_KEY }}
+          PKG_PATH: ${{ env.PKG_PATH }}
+          VERSION: ${{ env.VERSION }}
+        run: |
+          if [ -z "$PKG_PATH" ]; then
+            echo "No .pkg file found!"
+            exit 1
+          fi
+          curl -X POST https://cfdnsmanager.geri.app/upload \
+            -F "key=$UPLOAD_KEY" \
+            -F "version=$VERSION" \
+            -F "file=@$PKG_PATH" 

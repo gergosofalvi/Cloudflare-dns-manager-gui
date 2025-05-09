@@ -25,6 +25,18 @@ from kivy.uix.dropdown import DropDown
 import sys
 from kivy.utils import get_color_from_hex
 from kivy.base import EventLoop
+import threading
+import webbrowser
+
+def get_app_version():
+    try:
+        with open(os.path.join(os.path.dirname(__file__), 'APP_VERSION.txt'), 'r') as f:
+            return f.read().strip()
+    except Exception:
+        return "0.3.0"  # fallback default
+
+APP_VERSION = get_app_version()
+UPDATE_INFO_URL = "https://cfdnsmanager.geri.app/app/osx/update.json"
 
 CLOUDFLARE_API_BASE = "https://api.cloudflare.com/client/v4"
 API_TOKEN_FILE = os.path.join(
@@ -705,7 +717,7 @@ class DNSManager(BoxLayout):
             self._settings_popup_refresh(layout, popup)
         add_btn.bind(on_release=on_add)
         layout.add_widget(add_btn)
-                # Tutorial gomb hozzáadása a header után
+        # Tutorial gomb hozzáadása a header után
         tutorial_btn = Button(
             text="Create Token Tutorial",
             size_hint=(1, None),
@@ -717,6 +729,10 @@ class DNSManager(BoxLayout):
         )
         tutorial_btn.bind(on_release=self.show_token_tutorial)
         layout.add_widget(tutorial_btn)
+        # About/info gomb
+        about_btn = Button(text="About / Info", size_hint=(1, None), height=32, background_color=(0.2,0.6,1,1), color=CLOUDFLARE_WHITE, font_size=15)
+        about_btn.bind(on_release=self.show_about_popup)
+        layout.add_widget(about_btn)
         # Add account fields
         if getattr(self, 'add_account_fields_visible', False):
             acc_id_input = TextInput(hint_text="Account ID", multiline=False, size_hint=(1, None), height=36, font_size=15)
@@ -757,6 +773,10 @@ class DNSManager(BoxLayout):
             layout.add_widget(cancel_btn)
         close_btn = Button(text="Close", size_hint=(1, None), height=36, background_color=(.7,.7,.7,1), font_size=15)
         close_btn.bind(on_release=lambda i: popup.dismiss())
+        # Frissítés ellenőrző gomb
+        update_btn = Button(text="Check for updates", size_hint=(1, None), height=36, background_color=(0.2,0.6,1,1), color=CLOUDFLARE_WHITE, font_size=15)
+        update_btn.bind(on_release=lambda i: self.check_for_update())
+        layout.add_widget(update_btn)
         layout.add_widget(close_btn)
 
     def _delete_account_and_refresh(self, acc_id, layout, popup):
@@ -939,6 +959,89 @@ class DNSManager(BoxLayout):
         popup.content = layout
         popup.open()
 
+    def check_for_update(self):
+        from kivy.clock import Clock
+        def do_check():
+            import requests
+            try:
+                resp = requests.get(UPDATE_INFO_URL, timeout=5)
+                if resp.ok:
+                    data = resp.json()
+                    latest_version = data.get("version", "0.0.0")
+                    download_url = data.get("download_url", "")
+                    if self._is_newer_version(latest_version, APP_VERSION):
+                        Clock.schedule_once(lambda dt: self._show_update_popup(latest_version, download_url))
+                    else:
+                        Clock.schedule_once(lambda dt: self._show_update_popup(latest_version, None, up_to_date=True))
+                else:
+                    Clock.schedule_once(lambda dt: self._show_update_popup(None, None, failed=True, fail_reason=f"HTTP error: {resp.status_code}"))
+            except Exception as exc:
+                fail_reason = str(exc)
+                Clock.schedule_once(lambda dt: self._show_update_popup(None, None, failed=True, fail_reason=fail_reason))
+        threading.Thread(target=do_check, daemon=True).start()
+
+    def _is_newer_version(self, latest, current):
+        def parse(v):
+            return [int(x) for x in v.split(".")]
+        return parse(latest) > parse(current)
+
+    def _show_update_popup(self, latest_version, download_url, up_to_date=False, failed=False, fail_reason=None):
+        from kivy.uix.popup import Popup
+        from kivy.uix.boxlayout import BoxLayout
+        from kivy.uix.label import Label
+        from kivy.uix.button import Button
+        layout = BoxLayout(orientation='vertical', padding=20, spacing=16)
+        if failed:
+            msg = "Update check failed!"
+            if fail_reason:
+                msg += f"\nReason: {fail_reason}"
+            layout.add_widget(Label(text=msg, font_size=16, color=(1,0.3,0.3,1)))
+        elif up_to_date:
+            layout.add_widget(Label(text="You have the latest version.", font_size=17, color=(0.2,0.8,0.2,1)))
+        elif latest_version and download_url:
+            layout.add_widget(Label(text=f"New version available: {latest_version}", font_size=17, color=(0.2,0.6,1,1)))
+            layout.add_widget(Label(text=f"Current version: {APP_VERSION}", font_size=15, color=CLOUDFLARE_LIGHT))
+        else:
+            layout.add_widget(Label(text="Unknown update status.", font_size=17, color=(1,0.3,0.3,1)))
+        btn_row = BoxLayout(orientation='horizontal', spacing=12, size_hint=(1, None), height=44)
+        if not failed and latest_version and download_url:
+            download_btn = Button(text="Download update", size_hint=(1, 1), background_color=(0.2,0.6,1,1), color=CLOUDFLARE_WHITE, font_size=16)
+            def on_download(inst):
+                webbrowser.open(download_url)
+            download_btn.bind(on_release=on_download)
+            btn_row.add_widget(download_btn)
+        close_btn = Button(text="Close", size_hint=(1, 1), background_color=(.7,.7,.7,1), font_size=16)
+        close_btn.bind(on_release=lambda i: popup.dismiss())
+        btn_row.add_widget(close_btn)
+        layout.add_widget(btn_row)
+        popup = Popup(title="Update", size_hint=(None, None), size=(420, 220), auto_dismiss=True)
+        popup.content = layout
+        popup.open()
+
+    def show_about_popup(self, *args):
+        from kivy.uix.popup import Popup
+        from kivy.uix.boxlayout import BoxLayout
+        from kivy.uix.label import Label
+        from kivy.uix.button import Button
+        layout = BoxLayout(orientation='vertical', padding=20, spacing=16)
+        info = (
+            f"Cloudflare DNS Manager GUI\n"
+            f"Version: {APP_VERSION}\n"
+            f"Author: Gergo Sofalvi\n"
+            f"Website: cfdnsmanager.geri.app\n\n"
+            f"This application uses the Cloudflare Account API.\n"
+            f"The user interface is built with Python and Kivy.\n\n"
+            f"You can manage multiple Cloudflare accounts, domains, and DNS records easily.\n"
+            f"All data is stored locally."
+        )
+        layout.add_widget(Label(text=info, font_size=15, color=CLOUDFLARE_LIGHT, halign='left', valign='top', text_size=(380, None)))
+        close_btn = Button(text="Close", size_hint=(1, None), height=40, background_color=(.7,.7,.7,1), font_size=15)
+        close_btn.bind(on_release=lambda i: popup.dismiss())
+        layout.add_widget(close_btn)
+        popup = Popup(title="About", size_hint=(None, None), size=(420, 320), auto_dismiss=True)
+        popup.content = layout
+        popup.open()
+
 class CloudflareDNSApp(App):
     icon = resource_path('Cloudflare32px.icns')  # Dock és tálca ikon beállítása
     def build(self):
@@ -961,7 +1064,9 @@ class CloudflareDNSApp(App):
         # Mentés események
         Window.bind(on_resize=self._on_window_resize)
         Window.bind(on_move=self._on_window_move)
-        return DNSManager()
+        manager = DNSManager()
+        manager.check_for_update()  # Indításkor ellenőrizze a frissítést
+        return manager
 
     def _on_keyboard(self, window, key, scancode, codepoint, modifier):
         # 27 az ESC gomb
