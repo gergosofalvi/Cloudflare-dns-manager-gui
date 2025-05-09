@@ -29,6 +29,7 @@ jobs:
         run: |
           echo "GITHUB_REF: $GITHUB_REF"
           VERSION=${GITHUB_REF#refs/tags/}
+          echo "$VERSION" > version.txt
           echo "VERSION=$VERSION" >> $GITHUB_ENV
           sed -i '' "s/^APP_VERSION = .*/APP_VERSION = \"$VERSION\"/" kivyapp.py
           cat kivyapp.py | grep APP_VERSION
@@ -66,8 +67,8 @@ jobs:
         env:
           UPLOAD_KEY: ${{ secrets.UPLOAD_KEY }}
           DMG_PATH: ${{ env.DMG_PATH }}
-          VERSION: ${{ env.VERSION }}
         run: |
+          VERSION=$(cat version.txt)
           echo "Uploading version: $VERSION, DMG: $DMG_PATH"
           if [ -z "$DMG_PATH" ]; then
             echo "No .dmg file found!"
