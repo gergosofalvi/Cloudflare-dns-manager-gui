@@ -1,0 +1,27 @@
+services:
+  nginx:
+    image: nginx:latest
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./cfdnsmanager:/usr/share/nginx/html/app/osx:ro
+    depends_on:
+      - app
+  app:
+    build: ./cfdnsmanager
+    volumes:
+      - ./cfdnsmanager:/app/data
+    environment:
+      - UPLOAD_KEY=fMqfz2c6W7T2kJu9s9IxmPA1Y5hudEVZ
+    expose:
+      - "5000"
+  website:
+    build: ./website
+    ports:
+      - "4445:4445"
+    container_name: cfdnsmanager-website
+
+networks:
+  default:
+    driver: bridge

@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+
+# Optional: add sitemap if available
+# Sitemap: https://cfdnsmanager.geri.app/sitemap.xml 

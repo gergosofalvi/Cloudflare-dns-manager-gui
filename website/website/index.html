@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cloudflare DNS Manager for macOS - Fast, Secure, Multi-Account DNS Editor</title>
+    <meta name="description" content="Modern, native macOS application for managing multiple Cloudflare accounts and DNS zones. Edit, delete DNS records, clear cache, and enjoy automatic update checking. Beta app, under active development.">
+    <meta name="keywords" content="Cloudflare DNS, macOS DNS manager, DNS record editor, Cloudflare app, DNS cache, multi-account DNS, beta, secure DNS, fast DNS, modern UI">
+    <meta name="robots" content="index, follow">
+    <link rel="icon" href="static/logo_small.png" type="image/png">
+    <link rel="canonical" href="https://cfdnsmanager.geri.app/">
+    <meta property="og:title" content="Cloudflare DNS Manager for macOS">
+    <meta property="og:description" content="Modern, native macOS application for managing multiple Cloudflare accounts and DNS zones. Edit, delete DNS records, clear cache, and enjoy automatic update checking. Beta app, under active development.">
+    <meta property="og:image" content="https://cfdnsmanager.geri.app/static/logo_big.png">
+    <meta property="og:url" content="https://cfdnsmanager.geri.app/">
+    <meta property="og:type" content="website">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Cloudflare DNS Manager for macOS">
+    <meta name="twitter:description" content="Modern, native macOS application for managing multiple Cloudflare accounts and DNS zones. Edit, delete DNS records, clear cache, and enjoy automatic update checking. Beta app, under active development.">
+    <meta name="twitter:image" content="https://cfdnsmanager.geri.app/static/logo_big.png">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "Cloudflare DNS Manager",
+      "operatingSystem": "macOS",
+      "applicationCategory": "UtilitiesApplication",
+      "description": "Modern, native macOS application for managing multiple Cloudflare accounts and DNS zones. Edit, delete DNS records, clear cache, and enjoy automatic update checking. Beta app, under active development.",
+      "url": "https://cfdnsmanager.geri.app/",
+      "image": "https://cfdnsmanager.geri.app/static/logo_big.png",
+      "softwareVersion": "beta",
+      "author": {
+        "@type": "Person",
+        "name": "geri.app"
+      }
+    }
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <style>
+        body {
+            background: #181A20;
+            color: #EEEEEE;
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            min-height: 100vh;
+            overflow-x: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        .mui-card {
+            background: #23272F;
+            border-radius: 24px;
+            box-shadow: 0 8px 32px 0 #00000030, 0 1.5px 6px 0 #EF7C1720;
+            padding: 48px 32px 32px 32px;
+            max-width: 480px;
+            width: 100%;
+            margin: 48px 0 0 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            animation: fadeIn 1.2s cubic-bezier(.77,0,.18,1) 0.1s both;
+        }
+        .logo {
+            width: 120px;
+            height: 120px;
+            object-fit: contain;
+            margin-bottom: 32px;
+            opacity: 0;
+            transform: translateY(-40px) scale(0.9);
+            animation: logoIn 1.2s cubic-bezier(.77,0,.18,1) 0.2s forwards;
+        }
+        h1 {
+            font-size: 2.2rem;
+            font-weight: 700;
+            margin: 0 0 12px 0;
+            color: #EF7C17;
+            letter-spacing: 1px;
+            opacity: 0;
+            transform: translateY(30px);
+            animation: titleIn 1.1s cubic-bezier(.77,0,.18,1) 0.5s forwards;
+            text-align: center;
+            width: 100%;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .desc {
+            font-size: 1.1rem;
+            color: #B0B3B8;
+            margin-bottom: 36px;
+            text-align: center;
+            max-width: 340px;
+            opacity: 0;
+            transform: translateY(30px);
+            animation: descIn 1.1s cubic-bezier(.77,0,.18,1) 0.7s forwards;
+        }
+        .features {
+            background: #23272F;
+            border-radius: 16px;
+            padding: 18px 20px 14px 20px;
+            margin-bottom: 28px;
+            margin-top: 10px;
+            box-shadow: 0 2px 12px 0 #EF7C1710;
+            width: 100%;
+            max-width: 400px;
+        }
+        .features-title {
+            color: #EF7C17;
+            font-weight: 700;
+            font-size: 1.08rem;
+            margin-bottom: 8px;
+        }
+        .features ul {
+            margin: 0 0 0 18px;
+            padding: 0;
+            color: #EEEEEE;
+            font-size: 1rem;
+        }
+        .features li {
+            margin-bottom: 6px;
+        }
+        .gallery {
+            display: flex;
+            gap: 12px;
+            margin: 18px 0 24px 0;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        .gallery img {
+            width: 80px;
+            height: 56px;
+            object-fit: cover;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px 0 #00000030;
+            cursor: pointer;
+            transition: transform 0.15s cubic-bezier(.77,0,.18,1), box-shadow 0.15s;
+        }
+        .gallery img:hover {
+            transform: scale(1.08);
+            box-shadow: 0 4px 16px 0 #EF7C1740;
+        }
+        .lightbox {
+            position: fixed;
+            z-index: 9999;
+            left: 0;
+            top: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(24,26,32,0.98);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.35s cubic-bezier(.77,0,.18,1);
+        }
+        .lightbox.visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .lightbox-content {
+            transform: scale(0.92);
+            opacity: 0;
+            transition: transform 0.32s cubic-bezier(.77,0,.18,1), opacity 0.32s cubic-bezier(.77,0,.18,1);
+        }
+        .lightbox-content.visible {
+            transform: scale(1);
+            opacity: 1;
+        }
+        .lightbox-img {
+            max-width: 90vw;
+            max-height: 70vh;
+            border-radius: 12px;
+            box-shadow: 0 8px 40px 0 #00000080;
+            background: #23272F;
+            opacity: 1;
+            transition: opacity 0.32s cubic-bezier(.77,0,.18,1);
+        }
+        .lightbox-img.fading {
+            opacity: 0;
+        }
+        .lightbox-caption {
+            color: #EEEEEE;
+            font-size: 1.08rem;
+            margin: 18px 0 8px 0;
+            text-align: center;
+            min-height: 24px;
+        }
+        .lightbox-controls {
+            display: flex;
+            justify-content: center;
+            gap: 18px;
+            margin-top: 6px;
+        }
+        .lightbox-prev, .lightbox-next, .lightbox-close {
+            color: #fff;
+            background: #23272Fcc;
+            border: none;
+            border-radius: 20px;
+            min-width: 80px;
+            height: 40px;
+            font-size: 1.1rem;
+            cursor: pointer;
+            box-shadow: 0 2px 8px 0 #00000030;
+            transition: background 0.15s, color 0.15s;
+        }
+        .lightbox-prev:hover, .lightbox-next:hover, .lightbox-close:hover {
+            background: #EF7C17;
+            color: #181A20;
+        }
+        .version {
+            color: #B0B3B8;
+            font-size: 0.98rem;
+            margin-top: 8px;
+            opacity: 0;
+            transform: translateY(20px);
+            animation: versionIn 1.1s cubic-bezier(.77,0,.18,1) 1.2s forwards;
+        }
+        .download-btn {
+            background: linear-gradient(90deg, #EF7C17 60%, #ffb86c 100%);
+            color: #181A20;
+            font-weight: 700;
+            font-size: 1.1rem;
+            border: none;
+            border-radius: 32px;
+            padding: 16px 44px;
+            box-shadow: 0 4px 32px 0 #EF7C1740;
+            cursor: pointer;
+            margin-bottom: 18px;
+            transition: transform 0.18s cubic-bezier(.77,0,.18,1), box-shadow 0.18s;
+            opacity: 0;
+            transform: translateY(30px) scale(0.98);
+            animation: btnIn 1.1s cubic-bezier(.77,0,.18,1) 1.0s forwards;
+        }
+        .download-btn:hover {
+            transform: scale(1.04);
+            box-shadow: 0 8px 40px 0 #EF7C1780;
+        }
+        .footer {
+            margin-top: 60px;
+            color: #6F7375;
+            font-size: 0.95rem;
+            text-align: center;
+            opacity: 0.7;
+        }
+        .mui-divider {
+            width: 100%;
+            height: 1.5px;
+            background: linear-gradient(90deg, #23272F 0%, #EF7C17 50%, #23272F 100%);
+            border: none;
+            margin: 32px 0 24px 0;
+            opacity: 0.5;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        @keyframes logoIn {
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes titleIn {
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes descIn {
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes btnIn {
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes versionIn {
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @media (max-width: 600px) {
+            .mui-card { padding: 32px 8px 24px 8px; margin-top: 24px; }
+            .logo { width: 80px; height: 80px; }
+            h1 { font-size: 1.4rem; }
+            .features { padding: 12px 6px 10px 6px; }
+            .gallery img { width: 60px; height: 42px; }
+            .lightbox-img { max-width: 98vw; max-height: 50vh; }
+            .lightbox-controls { gap: 8px; }
+            .lightbox-prev, .lightbox-next, .lightbox-close { min-width: 60px; font-size: 0.98rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="mui-card">
+        <img src="static/logo_big.png" alt="Cloudflare DNS Manager logo" class="logo">
+        <h1>Cloudflare DNS Manager</h1>
+        <div class="desc">Modern, native macOS application for managing multiple Cloudflare accounts and DNS zones. Minimal, fast, secure.</div>
+        <div class="features">
+            <div class="features-title">Key Features</div>
+            <ul>
+                <li>Automatic update checking</li>
+                <li>Manage multiple Cloudflare accounts</li>
+                <li>Edit and delete DNS records</li>
+                <li>Clear DNS cache with one click</li>
+                <li>Modern, minimal UI</li>
+                <li>Beta application &mdash; under active development</li>
+            </ul>
+        </div>
+        <div class="gallery" id="gallery">
+            <img src="static/screenshot1_dns_view.png" alt="DNS View Screenshot">
+            <img src="static/screenshot2_serach_dns.png" alt="Search DNS Screenshot">
+            <img src="static/screenshot3_edit_create_dns.png" alt="Edit/Create DNS Screenshot">
+            <img src="static/screenshot4_settings.png" alt="Settings Screenshot">
+        </div>
+        <a href="#" class="download-btn" id="downloadBtn">Download</a>
+        <div class="version" id="version">Version: loading...</div>
+        <hr class="mui-divider">
+        <div class="footer">
+            &copy; <span id="year"></span> Cloudflare DNS Manager &mdash; geri.app<br>
+            <span style="font-size:0.9em;">Unofficial Cloudflare app</span>
+        </div>
+    </div>
+    <div class="lightbox" id="lightbox">
+        <div class="lightbox-content">
+            <img class="lightbox-img" id="lightboxImg" src="" alt="Screenshot">
+            <div class="lightbox-caption" id="lightboxCaption"></div>
+            <div class="lightbox-controls">
+                <button class="lightbox-prev" id="lightboxPrev" title="Previous">&#8592; Prev</button>
+                <button class="lightbox-close" id="lightboxClose" title="Close">&times; Close</button>
+                <button class="lightbox-next" id="lightboxNext" title="Next">Next &#8594;</button>
+            </div>
+        </div>
+    </div>
+    <script>
+        // Set current year
+        document.getElementById('year').textContent = new Date().getFullYear();
+        // Gallery lightbox logic
+        const screenshots = [
+            {src: 'static/screenshot1_dns_view.png', caption: 'DNS Records Overview'},
+            {src: 'static/screenshot2_serach_dns.png', caption: 'DNS Record Search'},
+            {src: 'static/screenshot3_edit_create_dns.png', caption: 'Edit/Create DNS Record'},
+            {src: 'static/screenshot4_settings.png', caption: 'Application Settings'}
+        ];
+        const gallery = document.getElementById('gallery');
+        const lightbox = document.getElementById('lightbox');
+        const lightboxImg = document.getElementById('lightboxImg');
+        const lightboxClose = document.getElementById('lightboxClose');
+        const lightboxPrev = document.getElementById('lightboxPrev');
+        const lightboxNext = document.getElementById('lightboxNext');
+        const lightboxContent = document.querySelector('.lightbox-content');
+        let currentIndex = 0;
+        function showLightbox(index) {
+            if (typeof currentIndex !== 'undefined' && currentIndex !== index) {
+                lightboxImg.classList.add('fading');
+                setTimeout(() => {
+                    currentIndex = index;
+                    lightboxImg.src = screenshots[index].src;
+                    document.getElementById('lightboxCaption').textContent = screenshots[index].caption;
+                    lightboxImg.onload = () => {
+                        lightboxImg.classList.remove('fading');
+                    };
+                }, 320);
+            } else {
+                currentIndex = index;
+                lightboxImg.src = screenshots[index].src;
+                document.getElementById('lightboxCaption').textContent = screenshots[index].caption;
+                lightbox.classList.add('visible');
+                setTimeout(() => {
+                    lightboxContent.classList.add('visible');
+                }, 10);
+            }
+        }
+        function closeLightbox() {
+            lightboxContent.classList.remove('visible');
+            setTimeout(() => {
+                lightbox.classList.remove('visible');
+                lightboxImg.src = '';
+            }, 320);
+        }
+        gallery.querySelectorAll('img').forEach((img, idx) => {
+            img.addEventListener('click', () => showLightbox(idx));
+        });
+        lightboxClose.addEventListener('click', closeLightbox);
+        lightboxPrev.addEventListener('click', () => {
+            if (currentIndex > 0) showLightbox(currentIndex - 1);
+        });
+        lightboxNext.addEventListener('click', () => {
+            if (currentIndex < screenshots.length - 1) showLightbox(currentIndex + 1);
+        });
+        lightbox.addEventListener('click', (e) => {
+            if (e.target === lightbox) closeLightbox();
+        });
+        document.addEventListener('keydown', (e) => {
+            if (!lightbox.classList.contains('visible')) return;
+            if (e.key === 'Escape') closeLightbox();
+            else if (e.key === 'ArrowLeft' && currentIndex > 0) showLightbox(currentIndex - 1);
+            else if (e.key === 'ArrowRight' && currentIndex < screenshots.length - 1) showLightbox(currentIndex + 1);
+        });
+        // Download link obfuscation
+        function setDownloadLink(data) {
+            let url = '';
+            if (data.dmg_url) url = data.dmg_url;
+            else if (data.pkg_url) url = data.pkg_url;
+            else if (data.app_url) url = data.app_url;
+            if (url) {
+                // Simple obfuscation: split and join
+                const btn = document.getElementById('downloadBtn');
+                btn.addEventListener('click', function(e) {
+                    if (!btn.dataset.ready) {
+                        e.preventDefault();
+                        btn.dataset.ready = '1';
+                        setTimeout(() => { window.location.href = url; }, 120);
+                    }
+                });
+                btn.setAttribute('href', '#download');
+            }
+        }
+        $(function() {
+            $.getJSON('https://cfdnsmanager.geri.app/app/osx/update.json', function(data) {
+                if (data.version) {
+                    $('#version').text('Version: ' + data.version);
+                    setDownloadLink(data);
+                } else {
+                    $('#version').text('Version: unknown');
+                }
+            }).fail(function() {
+                $('#version').text('Version: unavailable');
+            });
+        });
+    </script>
+</body>
+</html> 
