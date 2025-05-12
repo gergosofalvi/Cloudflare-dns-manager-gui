@@ -38,9 +38,13 @@ jobs:
         run: |
           pyinstaller --windowed --noconfirm --clean \
             --name "Cloudflare DNS Manager" \
-            --icon Cloudflare32px.icns \
+            --icon cfguiosx512.icns \
+            --add-data "cfguiosx512.icns:." \
+            --add-data "cfguiosx512.png:." \
             --add-data "Cloudflare32px.png:." \
             --add-data "Cloudflare32px_gray.png:." \
+            --add-data "Cloudflare32px.icns:." \
+            --add-data "Cloudflare32px.ico:." \
             kivyapp.py
 
       - name: Prepare DMG folder
